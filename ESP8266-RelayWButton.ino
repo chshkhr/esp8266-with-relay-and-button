@@ -1,18 +1,11 @@
 #define VERSION "0.0.5"
 
-//#define FASTBOT
 #define TELEGRAM
 
-#ifdef FASTBOT
-#include <FastBot.h>
-FastBot tgbot("");
-#define SKETCH_VERSION VERSION " FTg"
-#else
 #ifdef TELEGRAM
 #define SKETCH_VERSION VERSION " Tg"
 #else
 #define SKETCH_VERSION VERSION
-#endif
 #endif
 
 #define WEB_PASSWORD "<Your Password to exec commands on esp8266>"
@@ -216,7 +209,6 @@ void led(int val){
 }
 
 void handleRoot() {
-  //Serial.print("Root request\n");
   led(1);
   initgetFormRoot();
   server.send(200, "text/html", top + getFormRoot + bot);
@@ -224,7 +216,6 @@ void handleRoot() {
 }
 
 void handleUpdForm() {
-  //Serial.print("UpdForm request\n");
   led(1);
   initgetFormUpdate();
   server.send(200, "text/html", top + getFormUpdate + bot);
@@ -250,12 +241,6 @@ void update_error(int err) {
 void (*restartFunc)(void) = 0;  //declare restart function @ address 0
 
 void tgOwnerSend(String s) {
-#ifdef FASTBOT
-  if (WiFi.status() == WL_CONNECTED && tgavail) {
-    Serial.println(s);
-    tgbot.sendMessage(device + ": " + s);
-  }
-#else
 #ifdef TELEGRAM
   if (WiFi.status() == WL_CONNECTED && tgavail) {
     String message;
@@ -266,10 +251,8 @@ void tgOwnerSend(String s) {
     message += "):\n";
     message += s;
     Serial.println(message);
-    //myBot.sendToChannel(channel, message, true);
     myBot.sendTo(userid, s);
   }
-#endif
 #endif
 }
 
@@ -277,10 +260,6 @@ void doRestart() {
   do_restart = false;
   if (WiFi.status() == WL_CONNECTED) {
     tgOwnerSend("Restarting...");
-    // Wait until bot synced with telegram to prevent cyclic reboot
-#ifdef FASTBOT
-    // to avoid restart looping ?
-#else
 #ifdef TELEGRAM
     // to avoid restart looping
     while (WiFi.status() == WL_CONNECTED && !myBot.noNewMessage()) {
@@ -297,18 +276,6 @@ void doRestart() {
 
 void doUpdate() {
   do_update = false;
-#ifdef FASTBOT
-  if (WiFi.status() == WL_CONNECTED) {
-    tgOwnerSend("Updating...");
-    // Wait until bot synced with telegram to prevent cyclic reboot
-    while (WiFi.status() == WL_CONNECTED) {
-      Serial.print(".");
-      delay(100);
-    }
-    Serial.println("Update in 5 seconds...");
-    delay(5000);
-  }
-#else
 #ifdef TELEGRAM
   if (WiFi.status() == WL_CONNECTED) {
     tgOwnerSend("Updating...");
@@ -320,7 +287,6 @@ void doUpdate() {
     Serial.println("Update in 5 seconds...");
     delay(5000);
   }
-#endif
 #endif
   update(fwfn);
 }
@@ -335,23 +301,13 @@ void updateOtherDevice(String devip, String firmware) {
     http.begin(client, url);  //HTTP
     http.addHeader("Content-Type", "text/html");
 
-    //Serial.println(url);
-
     int httpCode = http.GET();
 
-    //Serial.println(httpCode);
-
-    // httpCode will be negative on error
     if (httpCode > 0) {
-      // HTTP header has been send and Server response header has been handled
-      //Serial.printf("UPDATE %s: %d\n", devip, httpCode);
-
       // file found at server
       if (httpCode == HTTP_CODE_OK) {
         const String& payload = http.getString();
-        //Serial.println("received payload:\n<<");
         Serial.println(payload);
-        //Serial.println(">>");
       }
     } else {
       Serial.printf("UPDATE %s failed, error: %s\n",
@@ -381,8 +337,6 @@ void update(String firmware) {
     Serial.println("...");
 
     WiFiClient client;
-
-    //ESPhttpUpdate.setLedPin(led_pin, LOW);
 
     ESPhttpUpdate.onStart(update_started);
     ESPhttpUpdate.onEnd(update_finished);
@@ -684,7 +638,6 @@ void try_connect() {
           if (tgavail) {
             String(pcs[i][3]).toCharArray(token, strlen(pcs[i][3]) + 1);
           }
-          sscanf(pcs[i][4], "%d", &userid_printer);
           break;
         }        
       }
@@ -737,17 +690,6 @@ void try_connect() {
       server.onNotFound(handleNotFound);
       server.begin();
 
-#ifdef FASTBOT
-      if (tgavail) {
-        tgbot.setToken(token);
-        tgbot.setChatID(userid);
-        tgbot.setTextMode(FB_TEXT); //FB_MARKDOWN);     // вернуть по умолчанию - FB_TEXT
-        tgbot.attach(newMsg);
-        // по форматированию читай тут https://core.telegram.org/bots/api#formatting-options
-        //tgbot.sendMessage(F("*Bold*, ||spoiler||, ~Strike~, `code`, [alexgyver.ru](https://alexgyver.ru/)"));
-        tgOwnerSend("Online.");
-      }
-#else
 #ifdef TELEGRAM
       if (tgavail) {
         // Sync time with NTP, to check properly Telegram certificate
@@ -764,11 +706,6 @@ void try_connect() {
         Serial.print("\nTest Telegram connection... ");
         myBot.begin() ? Serial.println("OK") : Serial.println("NOK");
 
-        //char welcome_msg[128];
-        //snprintf(welcome_msg, 128, "%s\nBOT @%s online", device, myBot.getBotName());
-
-        // Send a message to specific user who has started your bot
-        //myBot.sendTo(userid, welcome_msg);
         String s;
         if (relay_closed)
           s = "CLOSED";
@@ -777,7 +714,6 @@ void try_connect() {
 
         tgOwnerSend(SKETCH_VERSION " Online " + deviceip + " via " + ssid + ". Relay " + s);
       }
-#endif
 #endif
     }
   }
@@ -826,29 +762,6 @@ String process_tg_message(char* msg_txt)
   return s;
 }
 
-#ifdef FASTBOT
-// обработчик сообщений
-void newMsg(FB_msg& msg) {
-  // выводим имя юзера и текст сообщения
-  //Serial.print(msg.username);
-  //Serial.println(msg.text);
-
-  if (msg.userid != userid) return;
-  
-  // выводим всю информацию о сообщении
-  Serial.println(msg.toString());
-
-  int l = msg.text.length() + 1;
-  if (l < 3) return;
-  char buf[l];
-  msg.text.toCharArray(buf, l);
-
-  String s = process_tg_message(buf);
-  if (s != "")
-    tgbot.sendMessage(s);
-}
-#endif
-
 void setup(void) {
   WiFi.persistent(false);
 
@@ -894,10 +807,6 @@ void loop(void) {
 
     server.handleClient();
 
-#ifdef FASTBOT
-    if (tgavail)
-      tgbot.tick();   // тикаем в луп
-#else  
 #ifdef TELEGRAM
     if (tgavail) {
       // local variable to store telegram message data
@@ -914,7 +823,6 @@ void loop(void) {
           myBot.sendMessage(msg, s);
       }
     }
-#endif
 #endif
 
   } else {
